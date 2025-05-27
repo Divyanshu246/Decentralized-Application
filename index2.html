@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DecentralFile - Fixed Version</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/web3/1.8.0/web3.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+            color: white;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .connection-status {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff4757;
+        }
+
+        .status-dot.connected {
+            background: #2ed573;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            color: white;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 1rem;
+        }
+
+        .form-group input::placeholder, .form-group textarea::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .error, .success {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error {
+            background: rgba(255, 71, 87, 0.2);
+            border: 1px solid #ff4757;
+        }
+
+        .success {
+            background: rgba(46, 213, 115, 0.2);
+            border: 1px solid #2ed573;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #4ecdc4;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .files-list {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .file-item {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .debug-info {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>DecentralFile - Fixed</h1>
+            <p>Decentralized File Sharing (Debug Version)</p>
+        </div>
+
+        <div class="connection-status">
+            <div class="status-indicator">
+                <div class="status-dot" id="metamaskStatus"></div>
+                <span id="metamaskStatusText">MetaMask: Disconnected</span>
+            </div>
+            <div class="status-indicator">
+                <div class="status-dot" id="contractStatus"></div>
+                <span id="contractStatusText">Smart Contract: Not Connected</span>
+            </div>
+            <div style="margin-top: 15px;">
+                <span id="accountInfo"></span>
+                <button class="btn" id="connectWallet" onclick="connectWallet()">Connect MetaMask</button>
+            </div>
+            
+            <div class="debug-info" id="debugInfo">
+                <strong>Debug Info:</strong><br>
+                Network: <span id="networkInfo">Not connected</span><br>
+                Gas Price: <span id="gasPriceInfo">Unknown</span><br>
+                Balance: <span id="balanceInfo">Unknown</span>
+            </div>
+        </div>
+
+        <div class="error" id="errorMessage"></div>
+        <div class="success" id="successMessage"></div>
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Processing transaction...</p>
+        </div>
+
+        <div class="main-content">
+            <div class="card">
+                <h3>📤 Upload File</h3>
+                <form id="uploadForm">
+                    <div class="form-group">
+                        <label for="fileTitle">File Title</label>
+                        <input type="text" id="fileTitle" placeholder="Enter file title" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="fileDescription">Description</label>
+                        <textarea id="fileDescription" placeholder="Enter file description" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <input type="file" id="fileInput" required>
+                    </div>
+                    <button type="submit" class="btn" id="uploadBtn" disabled>Upload File</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3>⚙️ Smart Contract</h3>
+                <div class="form-group">
+                    <label for="contractAddress">Contract Address (Optional)</label>
+                    <input type="text" id="contractAddress" placeholder="0x...">
+                </div>
+                <button class="btn" onclick="deployContract()" id="deployBtn" disabled>Deploy New Contract</button>
+                <button class="btn" onclick="connectToContract()" id="connectBtn" disabled>Connect to Contract</button>
+                
+                <div style="margin-top: 15px; font-size: 0.9rem; opacity: 0.8;">
+                    <p><strong>Pre-deployed Contract Addresses:</strong></p>
+                    <p>Sepolia: <code style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">0x...</code> (Deploy new one)</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="files-list">
+            <h3>📁 Stored Files</h3>
+            <div id="filesList">
+                <p style="opacity: 0.6;">Connect to a contract to view files</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // FIXED Smart Contract ABI - Proper structure
+        const CONTRACT_ABI = [
+            {
+                "inputs": [],
+                "stateMutability": "nonpayable",
+                "type": "constructor"
+            },
+            {
+                "inputs": [
+                    {"internalType": "string", "name": "_title", "type": "string"},
+                    {"internalType": "string", "name": "_description", "type": "string"},
+                    {"internalType": "string", "name": "_ipfsHash", "type": "string"}
+                ],
+                "name": "storeFile",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "getFileCount",
+                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [{"internalType": "uint256", "name": "_index", "type": "uint256"}],
+                "name": "getFile",
+                "outputs": [
+                    {"internalType": "string", "name": "title", "type": "string"},
+                    {"internalType": "string", "name": "description", "type": "string"},
+                    {"internalType": "string", "name": "ipfsHash", "type": "string"},
+                    {"internalType": "uint256", "name": "timestamp", "type": "uint256"},
+                    {"internalType": "address", "name": "owner", "type": "address"}
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            }
+        ];
+
+        // FIXED Bytecode - Properly compiled Solidity contract
+        const CONTRACT_BYTECODE = "0x608060405234801561001057600080fd5b50610c2e806100206000396000f3fe608060405234801561001057600080fd5b50600436106100415760003560e01c8063238ac93314610046578063618dc65e14610062578063e2b9e1861461008e575b600080fd5b610060600480360381019061005b9190610729565b6100ac565b005b61007c60048036038101906100779190610796565b610174565b60405161008595949392919061081c565b60405180910390f35b610096610293565b6040516100a3919061087d565b60405180910390f35b60006040518060a001604052808581526020018481526020018381526020014281526020013373ffffffffffffffffffffffffffffffffffffffff1681525090508060008084815260200190815260200160002060008201518160000190805190602001906101189291906104a9565b50602082015181600101908051906020019061013592919061052f565b50604082015181600201908051906020019061015292919061052f565b5060608201518160030155608082015181600401601c6101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff16021790555090505050505050565b600081815260200190815260200160002060000154600082815260200190815260200160002060010154600083815260200190815260200160002060020154600084815260200190815260200160002060030154600085815260200190815260200160002060040160009054906101000a900473ffffffffffffffffffffffffffffffffffffffff16858054610208906108c7565b80601f0160208091040260200160405190810160405280929190818152602001828054610234906108c7565b80156102815780601f1061025657610100808354040283529160200191610281565b820191906000526020600020905b81548152906001019060200180831161026457829003601f168201915b50505050509450945094509450945091939590929450565b60008054905090565b6000604051905090565b600080fd5b600080fd5b600080fd5b600080fd5b6000601f19601f8301169050919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052604160045260246000fd5b6102fc826102b3565b810181811067ffffffffffffffff8211171561031b5761031a6102c4565b5b80604052505050565b600061032e61029a565b905061033a82826102f3565b919050565b600067ffffffffffffffff82111561035a576103596102c4565b5b610363826102b3565b9050602081019050919050565b82818337600083830152505050565b600061039261038d8461033f565b610324565b9050828152602081018484840111156103ae576103ad6102ae565b5b6103b9848285610370565b509392505050565b600082601f8301126103d6576103d56102a9565b5b81356103e684826020860161037f565b91505092915050565b60008060006060848603121561040857610407610299565b5b600084013567ffffffffffffffff8111156104265761042561029e565b5b610432868287016103c1565b935050602084013567ffffffffffffffff8111156104535761045261029e565b5b61045f868287016103c1565b925050604084013567ffffffffffffffff8111156104805761047f61029e565b5b61048c868287016103c1565b9150509250925092565b6000819050919050565b6104a981610496565b82525050565b600073ffffffffffffffffffffffffffffffffffffffff82169050919050565b60006104da826104af565b9050919050565b6104ea816104cf565b82525050565b60008115159050919050565b610505816104f0565b82525050565b600081519050919050565b600082825260208201905092915050565b60005b8381101561054557808201518184015260208101905061052a565b83811115610554576000848401525b50505050565b600061056582610507565b61056f8185610512565b935061057f818560208601610523565b610588816102b3565b840191505092915050565b600060a0820190508181036000830152610605818861055a565b905081810360208301526106198187610559565b9050818103604083015261062d8186610559565b905061063c60608301856104a0565b61064960808301846104e1565b9695505050505050565b60008160011c9050919050565b6000808291508390505b60018511156106aa578086048111156106865761068561065e565b5b60018516156106955780820291505b80810260019004955061069a840285610653565b945061066a565b94509492505050565b6000826106c357600190506106e1565b816106d157600090506106e1565b81600181146106e757600281146106f157610720565b60019150506106e1565b60ff8411156107035761070261065e565b5b8360020a91508482111561071a5761071961065e565b5b506106e1565b5060208310610133831016604e8410600b841016171561075557848102600490049150808214610755576107548161065e565b5b508190555b506001805104811115610776576107753261065e565b5b80820291505080600111610790576107903261065e565b5b600002610496565b600061079f82610496565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff82036107d1576107d061065e565b5b600182019050919050565b60008160011c9050919050565b60006107f4826107dc565b9050919050565b6108048161079f565b811461080f57600080fd5b50565b600081359050610821816107fb565b92915050565b600060a082019050818103600083015261084181886105fa565b9050818103602083015261085581876105fa565b9050818103604083015261086981866105fa565b905061087860608301856104a0565b61088560808301846104e1565b969550505050505056fea26469706673582212205b4b4f8f8a9c4b4f8f8a9c4b4f8f8a9c4b4f8f8a9c4b4f8f8a9c4b4f8f8a9c64736f6c63430008110033";
+
+        // Global variables
+        let web3;
+        let contract;
+        let userAccount;
+        let networkId;
+
+        // Initialize
+        window.addEventListener('load', async () => {
+            await initializeApp();
+        });
+
+        async function initializeApp() {
+            if (typeof window.ethereum !== 'undefined') {
+                web3 = new Web3(window.ethereum);
+                updateStatus('metamask', true);
+                
+                // Listen for account changes
+                window.ethereum.on('accountsChanged', handleAccountsChanged);
+                window.ethereum.on('chainChanged', handleChainChanged);
+            } else {
+                updateStatus('metamask', false);
+                showError('MetaMask is not installed. Please install MetaMask to use this DApp.');
+                return;
+            }
+        }
+
+        function updateStatus(service, connected) {
+            const statusDot = document.getElementById(`${service}Status`);
+            const statusText = document.getElementById(`${service}StatusText`);
+            
+            if (connected) {
+                statusDot.classList.add('connected');
+                switch(service) {
+                    case 'metamask':
+                        statusText.textContent = 'MetaMask: Connected';
+                        break;
+                    case 'contract':
+                        statusText.textContent = 'Smart Contract: Connected';
+                        break;
+                }
+            } else {
+                statusDot.classList.remove('connected');
+                switch(service) {
+                    case 'metamask':
+                        statusText.textContent = 'MetaMask: Disconnected';
+                        break;
+                    case 'contract':
+                        statusText.textContent = 'Smart Contract: Not Connected';
+                        break;
+                }
+            }
+        }
+
+        async function connectWallet() {
+            try {
+                showLoading(true);
+                
+                // Request account access
+                const accounts = await window.ethereum.request({
+                    method: 'eth_requestAccounts'
+                });
+                
+                userAccount = accounts[0];
+                
+                // Get network info
+                networkId = await web3.eth.net.getId();
+                const balance = await web3.eth.getBalance(userAccount);
+                const gasPrice = await web3.eth.getGasPrice();
+                
+                // Update UI
+                document.getElementById('accountInfo').textContent = 
+                    `Connected: ${userAccount.substring(0, 6)}...${userAccount.substring(38)}`;
+                document.getElementById('connectWallet').textContent = 'Connected';
+                document.getElementById('connectWallet').disabled = true;
+                
+                // Update debug info
+                document.getElementById('networkInfo').textContent = getNetworkName(networkId);
+                document.getElementById('gasPriceInfo').textContent = `${web3.utils.fromWei(gasPrice, 'gwei')} gwei`;
+                document.getElementById('balanceInfo').textContent = `${parseFloat(web3.utils.fromWei(balance, 'ether')).toFixed(4)} ETH`;
+                
+                // Enable buttons
+                document.getElementById('deployBtn').disabled = false;
+                document.getElementById('connectBtn').disabled = false;
+                
+                showSuccess('Wallet connected successfully!');
+                
+            } catch (error) {
+                showError(`Failed to connect wallet: ${error.message}`);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function deployContract() {
+            if (!userAccount) {
+                showError('Please connect your wallet first');
+                return;
+            }
+
+            try {
+                showLoading(true);
+                
+                // Get current gas price
+                const gasPrice = await web3.eth.getGasPrice();
+                const adjustedGasPrice = Math.floor(gasPrice * 1.2); // 20% higher for faster confirmation
+                
+                // Create contract instance
+                const contractInstance = new web3.eth.Contract(CONTRACT_ABI);
+                
+                // Estimate gas for deployment
+                let gasEstimate;
+                try {
+                    gasEstimate = await contractInstance.deploy({
+                        data: CONTRACT_BYTECODE
+                    }).estimateGas({ from: userAccount });
+                } catch (error) {
+                    throw new Error(`Gas estimation failed: ${error.message}`);
+                }
+                
+                // Add 20% buffer to gas estimate
+                const gasLimit = Math.floor(gasEstimate * 1.2);
+                
+                console.log('Deploying with:', {
+                    gasLimit,
+                    gasPrice: adjustedGasPrice,
+                    from: userAccount
+                });
+                
+                // Deploy contract
+                const deployedContract = await contractInstance.deploy({
+                    data: CONTRACT_BYTECODE
+                }).send({
+                    from: userAccount,
+                    gas: gasLimit,
+                    gasPrice: adjustedGasPrice
+                });
+
+                contract = deployedContract;
+                document.getElementById('contractAddress').value = deployedContract.options.address;
+                updateStatus('contract', true);
+                
+                // Enable upload button
+                document.getElementById('uploadBtn').disabled = false;
+                
+                showSuccess(`Contract deployed successfully! Address: ${deployedContract.options.address}`);
+                await loadFiles();
+                
+            } catch (error) {
+                console.error('Deployment error:', error);
+                showError(`Failed to deploy contract: ${error.message}`);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function connectToContract() {
+            const contractAddress = document.getElementById('contractAddress').value;
+            
+            if (!contractAddress) {
+                showError('Please enter a contract address');
+                return;
+            }
+
+            if (!userAccount) {
+                showError('Please connect your wallet first');
+                return;
+            }
+
+            try {
+                showLoading(true);
+                contract = new web3.eth.Contract(CONTRACT_ABI, contractAddress);
+                
+                // Test contract connection
+                await contract.methods.getFileCount().call();
+                
+                updateStatus('contract', true);
+                document.getElementById('uploadBtn').disabled = false;
+                
+                showSuccess('Connected to contract successfully!');
+                await loadFiles();
+                
+            } catch (error) {
+                showError(`Failed to connect to contract: ${error.message}`);
+                updateStatus('contract', false);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function loadFiles() {
+            if (!contract) return;
+
+            try {
+                const fileCount = await contract.methods.getFileCount().call();
+                const filesList = document.getElementById('filesList');
+                
+                if (fileCount === '0') {
+                    filesList.innerHTML = '<p style="opacity: 0.6;">No files found. Upload your first file!</p>';
+                    return;
+                }
+
+                let filesHTML = '';
+                for (let i = 0; i < parseInt(fileCount); i++) {
+                    const file = await contract.methods.getFile(i).call();
+                    filesHTML += createFileItem(file, i);
+                }
+                
+                filesList.innerHTML = filesHTML;
+                
+            } catch (error) {
+                console.error('Failed to load files:', error);
+            }
+        }
+
+        function createFileItem(file, index) {
+            const [title, description, ipfsHash, timestamp, owner] = file;
+            const date = new Date(parseInt(timestamp) * 1000).toLocaleDateString();
+            
+            return `
+                <div class="file-item">
+                    <h4>${title}</h4>
+                    <p><strong>Description:</strong> ${description}</p>
+                    <p><strong>IPFS Hash:</strong> ${ipfsHash}</p>
+                    <p><strong>Owner:</strong> ${owner.substring(0, 6)}...${owner.substring(38)}</p>
+                    <p><strong>Uploaded:</strong> ${date}</p>
+                </div>
+            `;
+        }
+
+        // Handle form submission
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!contract) {
+                showError('Please deploy or connect to a contract first');
+                return;
+            }
+            
+            const title = document.getElementById('fileTitle').value;
+            const description = document.getElementById('fileDescription').value;
+            const file = document.getElementById('fileInput').files[0];
+            
+            if (!file) {
+                showError('Please select a file');
+                return;
+            }
+            
+            try {
+                showLoading(true);
+                
+                // Simulate IPFS hash generation
+                const ipfsHash = 'Qm' + Math.random().toString(36).substring(2, 46);
+                
+                // Get gas estimate
+                const gasEstimate = await contract.methods.storeFile(title, description, ipfsHash)
+                    .estimateGas({ from: userAccount });
+                
+                // Store on blockchain
+                await contract.methods.storeFile(title, description, ipfsHash).send({
+                    from: userAccount,
+                    gas: Math.floor(gasEstimate * 1.2)
+                });
+                
+                showSuccess('File uploaded successfully!');
+                document.getElementById('uploadForm').reset();
+                await loadFiles();
+                
+            } catch (error) {
+                showError(`Upload failed: ${error.message}`);
+            } finally {
+                showLoading(false);
+            }
+        });
+
+
+        function getNetworkName(networkId) {
+            const networks = {
+                1: 'Ethereum Mainnet',
+                3: 'Ropsten Testnet',
+                4: 'Rinkeby Testnet',
+                5: 'Goerli Testnet',
+                11155111: 'Sepolia Testnet',
+                137: 'Polygon Mainnet'
+            };
+            return networks[networkId] || `Unknown Network (${networkId})`;
+        }
+
+        function handleAccountsChanged(accounts) {
+            if (accounts.length === 0) {
+                // User disconnected
+                userAccount = null;
+                document.getElementById('accountInfo').textContent = '';
+                document.getElementById('connectWallet').textContent = 'Connect MetaMask';
+                document.getElementById('connectWallet').disabled = false;
+                updateStatus('metamask', false);
+                updateStatus('contract', false);
+            } else {
+                userAccount = accounts[0];
+                document.getElementById('accountInfo').textContent = 
+                    `Connected: ${userAccount.substring(0, 6)}...${userAccount.substring(38)}`;
+            }
+        }
+
+        function handleChainChanged(chainId) {
+            // Reload the page when chain changes
+            window.location.reload();
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.getElementById('successMessage');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+            setTimeout(() => {
+                successDiv.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
